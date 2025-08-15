@@ -1,16 +1,33 @@
 import 'package:flutter/material.dart';
 import 'package:smartfactory_ui/pages/admin_register_page.dart';
+import 'package:smartfactory_ui/pages/dashboard_page.dart';
 import 'package:smartfactory_ui/pages/login_page.dart';
 import 'package:smartfactory_ui/pages/my_page.dart';
 import 'package:smartfactory_ui/pages/settings_page.dart';
+import 'package:smartfactory_ui/widgets/sf_page.dart';
+import 'core/auth.dart';
 import 'pages/mainpage.dart';
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await AuthService.bootstrap();
   runApp(const SmartFactoryApp());
 }
 
-class SmartFactoryApp extends StatelessWidget {
+class SmartFactoryApp extends StatefulWidget {
   const SmartFactoryApp({super.key});
+
+  @override
+  State<SmartFactoryApp> createState() => _SmartFactoryAppState();
+}
+
+class _SmartFactoryAppState extends State<SmartFactoryApp> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      AuthService.bootstrap();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -23,13 +40,19 @@ class SmartFactoryApp extends StatelessWidget {
         scaffoldBackgroundColor: const Color(0xFFB9FF73),
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
       ),
-      home: const MainPage(),
+
       routes: {
         '/login': (_) => const LoginPage(),
         '/admin-register': (_) => const AdminRegisterPage(),
         '/my': (_) => const MyPage(),
-        '/settings' : (_) => const SettingsPage(),
+        '/settings': (_) => const SettingsPage(),
+        '/dashboard':(_) => const DashboardPage(),
+        '/robot-call': (_) => const _StubPage(title: '로봇 호출하기'),
+        '/imu-test': (_) => const _StubPage(title: 'IMU 시험 테스트 확인'),
+        '/help':(_) => const _StubPage(title: "도움말 페이지"),
+        '/notifications':(_) => const _StubPage(title: "알림 페이지"),
       },
+      home: const MainPage(),
     );
   }
 }
@@ -41,9 +64,9 @@ class _StubPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text(title)),
-      body: Center(child: Text('$title 화면 구현 예정')),
+    return SFPage(
+        title: title,
+        child: const Center(child: Text("화면 구현 예정"))
     );
   }
 }

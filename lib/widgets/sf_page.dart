@@ -87,9 +87,13 @@ class SFPage extends StatelessWidget {
                         Navigator.pop(ctx);
                         Navigator.of(context).pushNamed('/help');
                       },
-                      onLogout: () {
+                      onLogout: () async {
                         Navigator.pop(ctx);
-                        AuthService.logout();
+                        try{
+                          await AuthService.logout();
+                        } catch(_){}
+                        Navigator.of(context , rootNavigator: true)
+                        .pushNamedAndRemoveUntil('/', (route) => false);
                       },
                     );
                   },
@@ -190,25 +194,6 @@ class _MenuPanel extends StatelessWidget {
               _Item('로그아웃', onLogout, destructive: true),
             ],
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _GreyInfo extends StatelessWidget {
-  const _GreyInfo(this.text);
-  final String text;
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
-      child: Text(
-        text,
-        style: const TextStyle(
-          color: CupertinoColors.systemGrey,
-          fontSize: 13,
-          fontWeight: FontWeight.w500,
         ),
       ),
     );

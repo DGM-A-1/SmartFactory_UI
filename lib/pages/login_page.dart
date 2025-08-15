@@ -29,7 +29,8 @@ class _LoginPageState extends State<LoginPage> {
   void _onLogin() async {
     try {
       await AuthService.login(_emailCtrl.text.trim(), _pwCtrl.text.trim());
-      if (mounted) Navigator.pop(context); // 로그인 성공 후 닫기/이동 (원하는대로 변경)
+      if (!mounted) return;
+      Navigator.pushNamedAndRemoveUntil(context, '/dashboard', (route) => false);
     } catch (e) {
       showCupertinoDialog(
         context: context,
