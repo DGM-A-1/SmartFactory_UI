@@ -213,142 +213,142 @@ class _MyPageState extends State<MyPage> {
         elevation: 0.5,
       ),
       // ✅ Stack/Positioned.fill 대신 ListView로 단순/안정 레이아웃
-        body: ListView(
-          padding: EdgeInsets.zero,
-          children: [
-            // 1) 초록 배너
-            Container(
-              height: 176,
-              width: double.infinity,
-              color: const Color(0xFF51A86E),
-            ),
+      body: ListView(
+        padding: EdgeInsets.zero,
+        children: [
+          // 1) 초록 배너
+          Container(
+            height: 176,
+            width: double.infinity,
+            color: const Color(0xFF51A86E),
+          ),
 
-            // 2) 아바타 + 패널 (아바타가 위에 오도록 Stack)
-            Stack(
-              clipBehavior: Clip.none,
-              children: [
-                // 패널 (라운드 탑) : 내용은 여기 Column에 그대로
-                Container(
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-                  ),
-                  padding: const EdgeInsets.fromLTRB(16, 72, 16, 24), // 아바타 공간
-                  child: Column(
-                    children: [
-                      Text(
-                        _nameCtrl.text.isNotEmpty ? _nameCtrl.text : '이름',
-                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: -0.2,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-
-                      _InfoPill(
-                        label: '이름', dimLabel: _editing,
-                        child: _pillValueField(_nameCtrl, enabled: false),
-                      ),
-                      const SizedBox(height: 12),
-
-                      _InfoPill(
-                        label: '이메일', dimLabel: _editing,
-                        child: _pillValueField(
-                          _emailCtrl, enabled: false,
-                          keyboardType: TextInputType.emailAddress,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-
-                      _InfoPill(
-                        label: '직책', dimLabel: _editing && !_editing,
-                        child: _pillValueField(_positionCtrl, enabled: _editing),
-                      ),
-                      const SizedBox(height: 12),
-
-                      _InfoPill(
-                        label: '부서', dimLabel: _editing,
-                        child: _pillValueField(_deptCtrl, enabled: false),
-                      ),
-                      const SizedBox(height: 12),
-
-                      _InfoPill(
-                        label: '연락처', dimLabel: _editing && !_editing,
-                        child: _pillValueField(
-                          _phoneCtrl, enabled: _editing,
-                          keyboardType: TextInputType.phone,
-                          hint: '010-xxxx-xxxx',
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          SizedBox(
-                            width: 120, height: 48,
-                            child: OutlinedButton(
-                              style: OutlinedButton.styleFrom(
-                                side: const BorderSide(color: Colors.redAccent, width: 1.2),
-                                foregroundColor: Colors.redAccent,
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                                backgroundColor: Colors.white,
-                              ),
-                              onPressed: () {
-                                setState(() { _editing = true; _dirty = false; });
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('편집 모드입니다. 변경 후 [적용]을 누르세요.')),
-                                );
-                              },
-                              child: const Text('수정'),
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          SizedBox(
-                            width: 120, height: 48,
-                            child: FilledButton(
-                              style: FilledButton.styleFrom(
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                              ),
-                              onPressed: (_editing && _dirty) ? _apply : null,
-                              child: const Text('적용'),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
+          // 2) 아바타 + 패널 (아바타가 위에 오도록 Stack)
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              // 패널 (라운드 탑) : 내용은 여기 Column에 그대로
+              Container(
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
                 ),
+                padding: const EdgeInsets.fromLTRB(16, 72, 16, 24), // 아바타 공간
+                child: Column(
+                  children: [
+                    Text(
+                      _nameCtrl.text.isNotEmpty ? _nameCtrl.text : '이름',
+                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.2,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
 
-                // 아바타: Stack 마지막에 두어 항상 패널 위에 보이게
-                Positioned(
-                  top: -52, // 살짝 위에서 내려오도록
-                  left: 0, right: 0,
-                  child: Center(
-                    child: Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Colors.white,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.08),
-                            blurRadius: 12, offset: const Offset(0, 6),
+                    _InfoPill(
+                      label: '이름', dimLabel: _editing,
+                      child: _pillValueField(_nameCtrl, enabled: false),
+                    ),
+                    const SizedBox(height: 12),
+
+                    _InfoPill(
+                      label: '이메일', dimLabel: _editing,
+                      child: _pillValueField(
+                        _emailCtrl, enabled: false,
+                        keyboardType: TextInputType.emailAddress,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+
+                    _InfoPill(
+                      label: '직책', dimLabel: _editing && !_editing,
+                      child: _pillValueField(_positionCtrl, enabled: _editing),
+                    ),
+                    const SizedBox(height: 12),
+
+                    _InfoPill(
+                      label: '부서', dimLabel: _editing,
+                      child: _pillValueField(_deptCtrl, enabled: false),
+                    ),
+                    const SizedBox(height: 12),
+
+                    _InfoPill(
+                      label: '연락처', dimLabel: _editing && !_editing,
+                      child: _pillValueField(
+                        _phoneCtrl, enabled: _editing,
+                        keyboardType: TextInputType.phone,
+                        hint: '010-xxxx-xxxx',
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        SizedBox(
+                          width: 120, height: 48,
+                          child: OutlinedButton(
+                            style: OutlinedButton.styleFrom(
+                              side: const BorderSide(color: Colors.redAccent, width: 1.2),
+                              foregroundColor: Colors.redAccent,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                              backgroundColor: Colors.white,
+                            ),
+                            onPressed: () {
+                              setState(() { _editing = true; _dirty = false; });
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('편집 모드입니다. 변경 후 [적용]을 누르세요.')),
+                              );
+                            },
+                            child: const Text('수정'),
                           ),
-                        ],
-                      ),
-                      child: CircleAvatar(
-                        radius: 46,
-                        backgroundColor: const Color(0xFFEDE7F6),
-                        child: Icon(Icons.person_outline, size: 52, color: Colors.deepPurple.shade400),
-                      ),
+                        ),
+                        const SizedBox(width: 16),
+                        SizedBox(
+                          width: 120, height: 48,
+                          child: FilledButton(
+                            style: FilledButton.styleFrom(
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                            ),
+                            onPressed: (_editing && _dirty) ? _apply : null,
+                            child: const Text('적용'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+
+              // 아바타: Stack 마지막에 두어 항상 패널 위에 보이게
+              Positioned(
+                top: -52, // 살짝 위에서 내려오도록
+                left: 0, right: 0,
+                child: Center(
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.white,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.08),
+                          blurRadius: 12, offset: const Offset(0, 6),
+                        ),
+                      ],
+                    ),
+                    child: CircleAvatar(
+                      radius: 46,
+                      backgroundColor: const Color(0xFFEDE7F6),
+                      child: Icon(Icons.person_outline, size: 52, color: Colors.deepPurple.shade400),
                     ),
                   ),
                 ),
-              ],
-            ),
-          ],
-        ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 
@@ -374,5 +374,4 @@ class _MyPageState extends State<MyPage> {
       ),
     );
   }
-
 }

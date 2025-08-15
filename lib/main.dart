@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:smartfactory_ui/pages/admin_register_page.dart';
 import 'package:smartfactory_ui/pages/dashboard_page.dart';
+import 'package:smartfactory_ui/pages/imu_db_page.dart';
 import 'package:smartfactory_ui/pages/login_page.dart';
 import 'package:smartfactory_ui/pages/my_page.dart';
 import 'package:smartfactory_ui/pages/settings_page.dart';
@@ -48,9 +49,10 @@ class _SmartFactoryAppState extends State<SmartFactoryApp> {
         '/settings': (_) => const SettingsPage(),
         '/dashboard':(_) => const DashboardPage(),
         '/robot-call': (_) => const _StubPage(title: '로봇 호출하기'),
-        '/imu-test': (_) => const _StubPage(title: 'IMU 시험 테스트 확인'),
+        '/imu-test': (_) => const ImuDatabasePage(),
         '/help':(_) => const _StubPage(title: "도움말 페이지"),
         '/notifications':(_) => const _StubPage(title: "알림 페이지"),
+        // '/imu/detail': (_) => const ImuDetailPage(),  // 다음 단계에서 구현
       },
       home: const MainPage(),
     );
