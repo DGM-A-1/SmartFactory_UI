@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:smartfactory_ui/core/auth.dart'; // AuthService.baseUrl, auth(token)
@@ -103,58 +104,54 @@ class _ImuDatabasePageState extends State<ImuDatabasePage> {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: [
-                        _Donut(rate: rate, total: _items.length),
-                        const SizedBox(width: 8),
-                        Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            _LegendDot(color: Colors.green, label: '합격 ($passCount)'),
-                            const SizedBox(height: 8),
-                            _LegendDot(color: Colors.red, label: '불합격 ($failCount)'),
-                          ],
-                        ),
-                      ],
+                    child: LayoutBuilder(
+                      builder: (context, cons) {
+                        // 도넛 지름 계산
+                        final donutSize = cons.maxWidth.clamp(200.0, 250.0);
+
+                        return SizedBox(
+                          height: donutSize, // 카드 높이를 도넛 지름만큼 확보
+                          child: Stack(
+                            children: [
+                              // 도넛 자체 (가운데 정렬)
+                              Align(
+                                alignment: Alignment.center,
+                                child: SizedBox(
+                                  width: donutSize,
+                                  height: donutSize,
+                                  child: _Donut(
+                                    rate: rate,
+                                    total: _items.length,
+                                    fixedSize: donutSize,
+                                    thicknessRatio: 0.20,
+                                  ),
+                                ),
+                              ),
+
+                              // 범례: 오른쪽 아래에 배치
+                              Positioned(
+                                right: 1,
+                                bottom: 0,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    _LegendDot(color: Colors.green, label: '합격 ($passCount)'),
+                                    const SizedBox(height: 6),
+                                    _LegendDot(color: Colors.red, label: '불합격 ($failCount)'),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
                     ),
                   ),
                 ),
               ),
             ),
 
-            // 리스트 헤더
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                child: Container(
-                  height: 40,
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF3F5F7),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Row(
-                    children: [
-                      const Expanded(
-                        child: Text(
-                          'IMU 시리얼 넘버',
-                          style: TextStyle(fontWeight: FontWeight.w600, color: Colors.black54),
-                        ),
-                      ),
-                      Text(
-                        '합격여부 / 세부사항',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                          color: Colors.black54,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
+
             const SliverToBoxAdapter(child: SizedBox(height: 6)),
 
             // 리스트
@@ -281,52 +278,135 @@ class _LegendDot extends StatelessWidget {
     );
   }
 }
-
 class _Donut extends StatelessWidget {
-  const _Donut({required this.rate, required this.total});
+  const _Donut({
+    super.key,
+    required this.rate,
+    required this.total,
+    this.fixedSize,              // 외부에서 강제 지름을 줄 때 사용
+    this.thicknessRatio = 0.10,  // 지름 대비 두께 (얇게: 0.08~0.12)
+  });
+
   final double rate; // 0.0 ~ 1.0
   final int total;
+  final double? fixedSize;
+  final double thicknessRatio;
 
   @override
   Widget build(BuildContext context) {
-    final pct = (rate * 100).round();
+    final pct = (rate.clamp(0, 1) * 100).round();
+    final screenW = MediaQuery.of(context).size.width;
+    final size = (fixedSize ?? (math.min(screenW, 420) * 0.64)).clamp(160.0, 360.0);
+    final stroke = (size * thicknessRatio).clamp(6.0, 14.0);
+
+    // 텍스트가 링 안에 확실히 들어오도록 비율로 계산
+    final pctFont = size * 0.18;   // 퍼센트
+    final subFont = size * 0.075;  // '총 n개'
+    final gap = size * 0.02;
+
     return SizedBox(
-      width: 160,
-      height: 160,
+      width: size,
+      height: size,
       child: Stack(
-        alignment: Alignment.center,
         children: [
-          // 바탕 트랙
-          CircularProgressIndicator(
-            value: 1,
-            strokeWidth: 14,
-            valueColor: const AlwaysStoppedAnimation(Color(0xFFE9ECEF)),
+          // 도넛 자체를 직접 그림
+          CustomPaint(
+            size: Size.square(size),
+            painter: _DonutPainter(
+              progress: rate.clamp(0.0, 1.0),
+              stroke: stroke,
+              bgColor: const Color(0xFFE9ECEF),
+              fgColor: const Color(0xFF2ECC71),
+            ),
           ),
-          // 합격률
-          TweenAnimationBuilder<double>(
-            tween: Tween(begin: 0, end: rate.clamp(0.0, 1.0)),
-            duration: const Duration(milliseconds: 700),
-            builder: (context, v, _) {
-              return CircularProgressIndicator(
-                value: v,
-                strokeWidth: 14,
-                valueColor: const AlwaysStoppedAnimation(Colors.green),
-                backgroundColor: Colors.transparent,
-              );
-            },
-          ),
-          // 가운데 텍스트
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text('$pct %', style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w800)),
-              const SizedBox(height: 4),
-              Text('총 $total개', style: const TextStyle(fontSize: 12, color: Colors.black54)),
-            ],
+          // 중앙 텍스트 - 항상 정확히 중앙
+          Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  '$pct %',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: pctFont,
+                    fontWeight: FontWeight.w800,
+                    height: 1.0,
+                  ),
+                ),
+                SizedBox(height: gap),
+                Text(
+                  '총 $total개',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: subFont,
+                    color: Colors.black54,
+                    fontWeight: FontWeight.w600,
+                    height: 1.0,
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
     );
+  }
+}
+
+class _DonutPainter extends CustomPainter {
+  _DonutPainter({
+    required this.progress,
+    required this.stroke,
+    required this.bgColor,
+    required this.fgColor,
+  });
+
+  final double progress; // 0~1
+  final double stroke;
+  final Color bgColor;
+  final Color fgColor;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    final center = rect.center;
+    final radius = size.shortestSide / 2;
+
+    final bgPaint = Paint()
+      ..color = bgColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = stroke
+      ..strokeCap = StrokeCap.round;
+
+    final fgPaint = Paint()
+      ..color = fgColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = stroke
+      ..strokeCap = StrokeCap.round;
+
+    // 시작각을 -90도로 해서 위쪽에서 시작(시각적 기대치와 일치)
+    const startAngle = -math.pi / 2;
+    final sweep = 2 * math.pi * progress;
+
+    // 배경 링
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius),
+      0, 2 * math.pi, false, bgPaint,
+    );
+
+    // 진행 링
+    if (progress > 0) {
+      canvas.drawArc(
+        Rect.fromCircle(center: center, radius: radius),
+        startAngle, sweep, false, fgPaint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _DonutPainter old) {
+    return old.progress != progress || old.stroke != stroke
+        || old.bgColor != bgColor || old.fgColor != fgColor;
   }
 }
 

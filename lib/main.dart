@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:smartfactory_ui/pages/admin_register_page.dart';
 import 'package:smartfactory_ui/pages/dashboard_page.dart';
 import 'package:smartfactory_ui/pages/imu_db_page.dart';
+import 'package:smartfactory_ui/pages/imu_detail_page.dart';
 import 'package:smartfactory_ui/pages/login_page.dart';
 import 'package:smartfactory_ui/pages/my_page.dart';
 import 'package:smartfactory_ui/pages/settings_page.dart';
@@ -10,7 +11,6 @@ import 'core/auth.dart';
 import 'pages/mainpage.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await AuthService.bootstrap();
   runApp(const SmartFactoryApp());
 }
 
@@ -35,6 +35,7 @@ class _SmartFactoryAppState extends State<SmartFactoryApp> {
     return MaterialApp(
       title: 'SmartFactory',
       debugShowCheckedModeBanner: false,
+      navigatorKey: appNavigatorKey,
       theme: ThemeData(
         useMaterial3: true,
         // 연두색 전체 배경
@@ -52,7 +53,7 @@ class _SmartFactoryAppState extends State<SmartFactoryApp> {
         '/imu-test': (_) => const ImuDatabasePage(),
         '/help':(_) => const _StubPage(title: "도움말 페이지"),
         '/notifications':(_) => const _StubPage(title: "알림 페이지"),
-        // '/imu/detail': (_) => const ImuDetailPage(),  // 다음 단계에서 구현
+        '/imu/detail': (ctx) => const ImuDetailPage(),
       },
       home: const MainPage(),
     );
