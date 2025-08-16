@@ -205,7 +205,7 @@ class _ImuDatabasePageState extends State<ImuDatabasePage> {
                 );
               },
             ),
-            const SliverToBoxAdapter(child: SizedBox(height: 16)),
+            const SliverToBoxAdapter(child: SizedBox(height: 13)),
           ],
         ),
       ),

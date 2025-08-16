@@ -36,7 +36,7 @@ class ImuDetailPage extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
           child: Column(
             children: [
-              _FieldBox(title: 'IMU 모델명', value: d('MPU 9250')), // 서버에서 제공되면 교체
+              _FieldBox(title: 'IMU 모델명', value: d('MPU 6500')), // 서버에서 제공되면 교체
               _FieldBox(title: 'IMU 시리얼 넘버', value: d(item.code)),
               _FieldBox(title: '진단시간', value: dtFmt.format(item.inspectedAt.toLocal())),
               const Divider(thickness: 2, height: 25,),

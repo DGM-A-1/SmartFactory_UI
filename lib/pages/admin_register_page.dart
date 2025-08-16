@@ -42,7 +42,7 @@ class _AdminRegisterPageState extends State<AdminRegisterPage> {
           // 로고(작게, 중앙)
           Center(
             child: Image.asset(
-              'assets/images/mainlogo.png',
+              'assets/images/fiveguys_logo.png',
               width: 56, // 시안 크기 느낌
               fit: BoxFit.contain,
             ),

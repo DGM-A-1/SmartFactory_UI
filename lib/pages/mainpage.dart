@@ -6,7 +6,7 @@ class MainPage extends StatelessWidget {
   const MainPage({super.key});
 
   // 디자인 토큰
-  static const Color kLime = Color(0xFFB9FF73);
+  static const Color kLime = Color(0xFFB6FF7E);
   static const double kButtonWidthFactor = 0.86; // 버튼 가로폭(화면의 86%)
 
   @override
@@ -21,20 +21,60 @@ class MainPage extends StatelessWidget {
           value: SystemUiOverlayStyle.dark,
           child: Column(
             children: [
-              // 로고: 더 크게 + 위로 배치
+              // 로고 + 문구 영역
               Expanded(
                 child: Align(
-                  alignment: const Alignment(0, -0.25),
-                  child: Image.asset(
-                    'assets/images/mainlogo.png',
-                    width: (size.width * 0.75).clamp(0, 380).toDouble(),
-                    fit: BoxFit.contain,
-                    filterQuality: FilterQuality.high,
+                  alignment: const Alignment(0, -0.15),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Fiveguys 로고 (경로는 기존 그대로 유지)
+                      Image.asset(
+                        'assets/images/fiveguys_logo.png',
+                        width: (size.width * 0.75).clamp(0, 450).toDouble(),
+                        fit: BoxFit.contain,
+                        filterQuality: FilterQuality.high,
+                      ),
+                      const SizedBox(height: 24),
+
+                      // 공장 아이콘 + SMART FACTORY
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // 공장 아이콘 (투명 PNG)
+                          Image.asset(
+                            'assets/images/Factorylogo.png', // ← 아이콘 파일 경로만 맞춰주세요
+                            width: 70,
+                            height: 70,
+                            fit: BoxFit.contain,
+                          ),
+                          const SizedBox(width: 8),
+                          const Text(
+                            'SMART FACTORY',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 35,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 0.3,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      const Text(
+                        'IMU Real-Time Monitoring & Delivery System',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
 
-              // 하단 버튼들: 가로폭 좁게
+              // 하단 버튼들: 가로폭 좁게 (그대로 유지)
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
                 child: Column(
