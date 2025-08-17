@@ -2,14 +2,18 @@ import 'dart:async';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:smartfactory_ui/core/app_config.dart';
+import '../core/robot_comm_rosbridge.dart';
 import '../widgets/sf_page.dart';
 
 // ---- 상태/모델 ----
-enum RobotStatus { idle, moving, charging, error }
+enum RobotStatus { disconnected, idle, moving, charging, error }
 
 extension RobotStatusText on RobotStatus {
   String get label {
     switch (this) {
+      case RobotStatus.disconnected:
+        return '연결 안됨';
       case RobotStatus.idle:
         return '대기 중';
       case RobotStatus.moving:
@@ -32,11 +36,20 @@ class RobotState {
 
 // ---- 통신 어댑터 인터페이스 ----
 abstract class RobotCommAdapter {
-  Future<void> connect();
+  /// 로봇별 연결 시도 (성공 시 true)
+  Future<bool> connectRobot(int robotId);
+
+  /// 필요 시 연결 해제
+  Future<void> disconnectRobot(int robotId);
+
+  /// 출발 신호
   Future<bool> sendStart(int robotId);
+
+  /// 현재 상태 1회 조회(연결 안되어 있으면 disconnected로)
   Future<RobotStatus> fetchStatus(int robotId);
+
+  /// 상태 스트림(연결 이후에만 의미 있음)
   Stream<RobotStatus> watchStatus(int robotId);
-  Future<void> dispose();
 }
 
 // ---- 임시 더미 구현 ----
@@ -45,29 +58,39 @@ class DummyRobotComm implements RobotCommAdapter {
     1: StreamController.broadcast(),
     2: StreamController.broadcast(),
   };
-  final _status = <int, RobotStatus>{1: RobotStatus.idle, 2: RobotStatus.idle};
+  final _status = <int, RobotStatus>{
+    1: RobotStatus.disconnected,
+    2: RobotStatus.disconnected
+  };
+  final _connected = <int, bool>{1: false, 2: false};
 
   @override
-  Future<void> connect() async {}
+  Future<bool> connectRobot(int robotId) async {
+    // 더미: 1초 후 성공, 상태를 idle로 전환
+    await Future.delayed(const Duration(seconds: 1));
+    _connected[robotId] = true;
+    _push(robotId, RobotStatus.idle);
+    return true;
+  }
 
   @override
-  Future<void> dispose() async {
-    for (final c in _controllers.values) {
-      await c.close();
-    }
+  Future<void> disconnectRobot(int robotId) async {
+    _connected[robotId] = false;
+    _push(robotId, RobotStatus.disconnected);
   }
 
   @override
   Future<bool> sendStart(int robotId) async {
+    if (_connected[robotId] != true) return false;
     _push(robotId, RobotStatus.moving);
-    await Future.delayed(const Duration(seconds: 3));
+    await Future.delayed(const Duration(seconds: 2));
     _push(robotId, RobotStatus.idle);
     return true;
   }
 
   @override
   Future<RobotStatus> fetchStatus(int robotId) async {
-    return _status[robotId] ?? RobotStatus.idle;
+    return _status[robotId] ?? RobotStatus.disconnected;
   }
 
   @override
@@ -91,38 +114,66 @@ class RobotCallPage extends StatefulWidget {
 
 class _RobotCallPageState extends State<RobotCallPage> {
   late final RobotCommAdapter _comm;
-  final RobotState _robot1 = RobotState(id: 1, status: RobotStatus.idle);
-  final RobotState _robot2 = RobotState(id: 2, status: RobotStatus.idle);
+  final RobotState _robot1 = RobotState(id: 1, status: RobotStatus.disconnected);
+  final RobotState _robot2 = RobotState(id: 2, status: RobotStatus.disconnected);
   StreamSubscription? _sub1;
   StreamSubscription? _sub2;
 
   @override
   void initState() {
     super.initState();
-    _comm = DummyRobotComm(); // 후에 rosbridge/TCP/REST 등으로 교체
+    final url = AppConfig.I.rosWsUrl.value;
+    _comm = RosbridgeComm(url :url);
     _bootstrap();
   }
 
   Future<void> _bootstrap() async {
-    await _comm.connect();
+    // 초기 상태 동기화 (연결 안됨이 기본)
     _robot1.status.value = await _comm.fetchStatus(1);
     _robot2.status.value = await _comm.fetchStatus(2);
-    _sub1 = _comm.watchStatus(1).listen((s) => _robot1.status.value = s);
-    _sub2 = _comm.watchStatus(2).listen((s) => _robot2.status.value = s);
+    // 스트림은 연결 이후에 구독(연결 버튼 시)
   }
 
   @override
   void dispose() {
     _sub1?.cancel();
     _sub2?.cancel();
-    _comm.dispose();
     super.dispose();
+  }
+
+  Future<void> _connectRobot(int robotId) async {
+    final ok = await _comm.connectRobot(robotId);
+    if (!mounted) return;
+    if (ok) {
+      // 연결 후 상태 스트림 구독 시작
+      final sub = _comm.watchStatus(robotId).listen((s) {
+        if (!mounted) return;
+        if (robotId == 1) {
+          _robot1.status.value = s;
+        } else {
+          _robot2.status.value = s;
+        }
+      });
+
+      if (robotId == 1) {
+        _sub1?.cancel();
+        _sub1 = sub;
+      } else {
+        _sub2?.cancel();
+        _sub2 = sub;
+      }
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('로봇$robotId 연결 성공')));
+    } else {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('로봇$robotId 연결 실패')));
+    }
   }
 
   Future<void> _callRobot(int robotId) async {
     final ok = await _comm.sendStart(robotId);
     if (!mounted) return;
-    final msg = ok ? '로봇$robotId 출발 신호 전송 완료' : '로봇$robotId 출발 신호 실패';
+    final msg = ok ? '로봇$robotId 출발 신호 전송 완료' : '로봇$robotId가 연결되지 않았습니다';
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
@@ -135,24 +186,25 @@ class _RobotCallPageState extends State<RobotCallPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _MapCard(),                 // 지도 카드: 배경 흰색으로 수정
+            _MapCard(),
             const SizedBox(height: 8),
-            const _Legend(),            // 범례: 글씨 작게 + 세로(Column)
+            const _Legend(),
             const SizedBox(height: 12),
             _CallButtons(
               onCall1: () => _callRobot(1),
               onCall2: () => _callRobot(2),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
             _StatusBlock(
               title: '로봇1 상태',
               statusListenable: _robot1.status,
+              onConnect: () => _connectRobot(1),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
             _StatusBlock(
               title: '로봇2 상태',
               statusListenable: _robot2.status,
-
+              onConnect: () => _connectRobot(2),
             ),
             const SizedBox(height: 32),
           ],
@@ -163,82 +215,60 @@ class _RobotCallPageState extends State<RobotCallPage> {
 }
 
 // --- UI 위젯들 ---
-
 class _MapCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
       elevation: 0,
-      // ✅ 요청: 배경 '흰색'
-      color: Colors.white,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(2),
-        child: AspectRatio(
-          aspectRatio: 4 / 3,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(5),
-            child: FittedBox(
-              fit: BoxFit.contain,
-              child: Image.asset(
-                'assets/images/floor_map.png',
-                errorBuilder: (_, __, ___) => const Padding(
-                  padding: EdgeInsets.all(30),
-                  child: Text(
-                    '지도 이미지를 준비해주세요 (assets/floor_map.png)',
-                    style: TextStyle(color: Colors.black),
-                  ),
+      color: Colors.white, // 흰색 배경 유지
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(1)),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          // 카드의 가용 너비를 기준으로, 좀 더 키 큰 비율로 영역을 넓게 잡음
+          // (4:3보다 세로를 조금 더 주어, 흰 영역을 빵빵하게 채움)
+          const aspect = 3 / 2; // 필요하면 3/2, 4/3 등으로 미세 조정 가능
+          final height = constraints.maxWidth / aspect;
+
+          return SizedBox(
+            width: double.infinity,
+            height: height,
+            child: Padding(
+              // 내부 여백 최소화해서 거의 가득 차게
+              padding: EdgeInsets.zero,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(1),
+                child: Image.asset(
+                  'assets/images/floor_map.png',
+                  fit: BoxFit.contain, // 이미지 전체가 보이도록(잘림 방지)
                 ),
               ),
             ),
-          ),
-        ),
+          );
+        },
       ),
     );
   }
 }
 
+
 class _Legend extends StatelessWidget {
   const _Legend();
 
-  Widget _dot(Color c) => Container(
-    width: 12,
-    height: 12,
-    decoration: BoxDecoration(color: c, shape: BoxShape.circle),
-  );
-
   @override
   Widget build(BuildContext context) {
-    // ✅ 요청: 글씨 작게 + 세로(Column) 배치 + 검정색
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: const [
-            // 로봇 1
-            _LegendDotText(
-              color: Color(0xFF7A5C45),
-              label: '로봇 1',
-            ),
-          ],
-        ),
-        const SizedBox(height: 6),
-        Row(
-          children: const [
-            // 로봇 2
-            _LegendDotText(
-              color: Color(0xFF6B7280),
-              label: '로봇 2',
-            ),
-          ],
-        ),
+      children: const [
+        _LegendRow(color: Color(0xFF7A5C45), label: '로봇 1'),
+        SizedBox(height: 15), // 행 간격 작게
+        _LegendRow(color: Color(0xFF6B7280), label: '로봇 2'),
       ],
     );
   }
 }
 
-class _LegendDotText extends StatelessWidget {
-  const _LegendDotText({required this.color, required this.label});
+class _LegendRow extends StatelessWidget {
+  const _LegendRow({required this.color, required this.label});
   final Color color;
   final String label;
 
@@ -247,17 +277,15 @@ class _LegendDotText extends StatelessWidget {
     return Row(
       children: [
         Container(
-          width: 12,
-          height: 12,
+          width: 12, height: 12,
           decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
-        const SizedBox(width: 6),
-        const SizedBox.shrink(),
+        const SizedBox(width: 8),
         Text(
           label,
           style: const TextStyle(
-            fontSize: 14,
-            color: Colors.black, // ✅ 검정색
+            fontSize: 13,
+            color: Colors.black,
             fontWeight: FontWeight.w500,
           ),
         ),
@@ -274,7 +302,6 @@ class _CallButtons extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Expanded(
           child: CupertinoButton(
@@ -282,82 +309,123 @@ class _CallButtons extends StatelessWidget {
             color: CupertinoColors.systemGrey5,
             borderRadius: BorderRadius.circular(24),
             onPressed: onCall1,
-            child: const Text(
-              '로봇1 호출',
-              style: TextStyle(
-                color: Colors.black, // ✅ 검정색
-                fontWeight: FontWeight.w600,
-              ),
-            ),
+            child: const Text('로봇1 호출', style: TextStyle(color: Colors.black, fontWeight: FontWeight.w600)),
           ),
         ),
-        const SizedBox(width: 12),
+        const SizedBox(width: 8),
         Expanded(
           child: CupertinoButton(
             padding: const EdgeInsets.symmetric(vertical: 12),
             color: CupertinoColors.systemGrey5,
             borderRadius: BorderRadius.circular(24),
             onPressed: onCall2,
-            child: const Text(
-              '로봇2 호출',
-              style: TextStyle(
-                color: Colors.black, // ✅ 검정색
-                fontWeight: FontWeight.w600,
-              ),
-            ),
+            child: const Text('로봇2 호출', style: TextStyle(color: Colors.black, fontWeight: FontWeight.w600)),
           ),
         ),
       ],
     );
   }
 }
-
 class _StatusBlock extends StatelessWidget {
-  const _StatusBlock({required this.title, required this.statusListenable});
+  const _StatusBlock({
+    required this.title,
+    required this.statusListenable,
+    required this.onConnect,
+  });
+
   final String title;
   final ValueListenable<RobotStatus> statusListenable;
+  final VoidCallback onConnect;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // ✅ 제목도 검정색
-        Text(
-          title,
-          style: const TextStyle(
-            fontSize: 25,
-            fontWeight: FontWeight.w700,
-            color: Colors.black,
-          ),
-        ),
-        const SizedBox(height: 8),
-        ValueListenableBuilder<RobotStatus>(
-          valueListenable: statusListenable,
-          builder: (_, s, __) {
-            return Container(
+    return ValueListenableBuilder<RobotStatus>(
+      valueListenable: statusListenable,
+      builder: (_, s, __) {
+        final isDisconnected = s == RobotStatus.disconnected;
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // 제목 + 연결 버튼
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.black,
+                    ),
+                  ),
+                ),
+                // 연결 버튼(슬림)
+                SizedBox(
+                  height: 36,
+                  child: CupertinoButton(
+                    minSize: 0,
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+                    borderRadius: BorderRadius.circular(18),
+                    color: isDisconnected
+                        ? CupertinoColors.systemYellow
+                        : CupertinoColors.systemGrey4,
+                    onPressed: isDisconnected ? onConnect : null,
+                    child: Text(
+                      isDisconnected ? '연결' : '연결됨',
+                      style: const TextStyle(
+                        color: Colors.black,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 4),
+
+            // 상태 박스
+            Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
               decoration: BoxDecoration(
                 color: CupertinoColors.systemGrey6,
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(3),
               ),
               child: Row(
                 children: [
                   _StatusDot(status: s),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 10),
                   Text(
                     s.label,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      color: Colors.black, // ✅ 검정색
-                    ),
+                    style: const TextStyle(fontSize: 14, color: Colors.black),
                   ),
                 ],
               ),
-            );
-          },
-        ),
-      ],
+            ),
+
+            // ✅ "연결 안됨"일 때만, 상태 박스 '밑에' 테스트 버튼 노출
+            if (isDisconnected) ...[
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: OutlinedButton.icon(
+                  icon: const Icon(Icons.bug_report_outlined, size: 18, color: Colors.black),
+                  label: const Text('로봇 연결 테스트', style: TextStyle(color: Colors.black)),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.black,
+                    side: const BorderSide(color: Colors.black12),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  onPressed: () => Navigator.pushNamed(context, '/ros-test'),
+                ),
+              ),
+            ],
+          ],
+        );
+      },
     );
   }
 }
@@ -368,6 +436,8 @@ class _StatusDot extends StatelessWidget {
 
   Color get _color {
     switch (status) {
+      case RobotStatus.disconnected:
+        return Colors.grey;
       case RobotStatus.idle:
         return Colors.green;
       case RobotStatus.moving:
@@ -381,10 +451,6 @@ class _StatusDot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 10,
-      height: 10,
-      decoration: BoxDecoration(color: _color, shape: BoxShape.circle),
-    );
+    return Container(width: 12, height: 12, decoration: BoxDecoration(color: _color, shape: BoxShape.circle));
   }
 }

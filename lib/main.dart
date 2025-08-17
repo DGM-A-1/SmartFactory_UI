@@ -6,6 +6,7 @@ import 'package:smartfactory_ui/pages/imu_detail_page.dart';
 import 'package:smartfactory_ui/pages/login_page.dart';
 import 'package:smartfactory_ui/pages/my_page.dart';
 import 'package:smartfactory_ui/pages/robot_call_page.dart';
+import 'package:smartfactory_ui/pages/ros_test_page.dart';
 import 'package:smartfactory_ui/pages/settings_page.dart';
 import 'package:smartfactory_ui/widgets/sf_page.dart';
 import 'core/auth.dart';
@@ -55,6 +56,7 @@ class _SmartFactoryAppState extends State<SmartFactoryApp> {
         '/help':(_) => const _StubPage(title: "도움말 페이지"),
         '/notifications':(_) => const _StubPage(title: "알림 페이지"),
         '/imu/detail': (ctx) => const ImuDetailPage(),
+        '/ros-test':(context) => const RosTestPage(),
       },
       home: const MainPage(),
     );
