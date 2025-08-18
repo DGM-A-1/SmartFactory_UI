@@ -7,21 +7,32 @@ import '../core/robot_comm_rosbridge.dart';
 import '../widgets/sf_page.dart';
 
 // ---- 상태/모델 ----
-enum RobotStatus { disconnected, idle, moving, charging, error }
+enum RobotStatus {
+  disconnected,
+  idle,
+  toLoading,        // 상차 위치 이동 중
+  loadingWait,      // 무게 대기 중
+  toDestination,    // 도착지 이동 중
+  unloadingWait,    // 하역 대기 중
+  returning,        // 복귀 중
+  moving,           // (기존 호환)
+  charging,
+  error,
+}
 
 extension RobotStatusText on RobotStatus {
   String get label {
     switch (this) {
-      case RobotStatus.disconnected:
-        return '연결 안됨';
-      case RobotStatus.idle:
-        return '대기 중';
-      case RobotStatus.moving:
-        return '이동 중';
-      case RobotStatus.charging:
-        return '충전 중';
-      case RobotStatus.error:
-        return '오류';
+      case RobotStatus.disconnected: return '연결 안됨';
+      case RobotStatus.idle:         return '대기 중';
+      case RobotStatus.toLoading:    return '상차 위치 이동 중';
+      case RobotStatus.loadingWait:  return '무게 대기 중';
+      case RobotStatus.toDestination:return '도착지 이동 중';
+      case RobotStatus.unloadingWait:return '하역 대기 중';
+      case RobotStatus.returning:    return '복귀 중';
+      case RobotStatus.moving:       return '이동 중';
+      case RobotStatus.charging:     return '충전 중';
+      case RobotStatus.error:        return '오류';
     }
   }
 }
@@ -436,16 +447,16 @@ class _StatusDot extends StatelessWidget {
 
   Color get _color {
     switch (status) {
-      case RobotStatus.disconnected:
-        return Colors.grey;
-      case RobotStatus.idle:
-        return Colors.green;
-      case RobotStatus.moving:
-        return Colors.blue;
-      case RobotStatus.charging:
-        return Colors.orange;
-      case RobotStatus.error:
-        return Colors.red;
+      case RobotStatus.disconnected: return Colors.grey;
+      case RobotStatus.idle:         return Colors.green;
+      case RobotStatus.toLoading:
+      case RobotStatus.toDestination:
+      case RobotStatus.returning:    return Colors.blue;
+      case RobotStatus.loadingWait:
+      case RobotStatus.unloadingWait:return Colors.orange;
+      case RobotStatus.moving:       return Colors.blue;
+      case RobotStatus.charging:     return Colors.orange;
+      case RobotStatus.error:        return Colors.red;
     }
   }
 

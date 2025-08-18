@@ -55,15 +55,23 @@ class RosbridgeComm implements RobotCommAdapter {
   }
 
   RobotStatus _parseStatus(dynamic msg) {
-    // std_msgs/String: { "data": "idle" }
-    final str = (msg is Map && msg['data'] is String) ? msg['data'] as String : 'idle';
+    final str = (msg is Map && msg['data'] is String)
+        ? (msg['data'] as String).toLowerCase()
+        : 'idle';
     switch (str) {
-      case 'moving': return RobotStatus.moving;
-      case 'charging': return RobotStatus.charging;
-      case 'error':   return RobotStatus.error;
-      default:        return RobotStatus.idle;
+      case 'to_loading':     return RobotStatus.toLoading;
+      case 'loading_wait':   return RobotStatus.loadingWait;
+      case 'to_destination': return RobotStatus.toDestination;
+      case 'unloading_wait': return RobotStatus.unloadingWait;
+      case 'returning':      return RobotStatus.returning;
+      case 'moving':         return RobotStatus.moving;      // 호환
+      case 'charging':       return RobotStatus.charging;
+      case 'error':          return RobotStatus.error;
+      case 'idle':
+      default:               return RobotStatus.idle;
     }
   }
+
 
   void _send(Map<String, dynamic> payload) {
     print('[rosbridge->] ${jsonEncode(payload)}');
