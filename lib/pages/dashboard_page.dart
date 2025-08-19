@@ -28,24 +28,16 @@ class DashboardPage extends StatelessWidget {
               // 인사 문구
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+                children: const [
+                  _WelcomeTitle(),
+                  SizedBox(height: 8),
                   Text(
-                    '$display님, 반갑습니다!',
-                    style: const TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.w800,
-                      height: 1.2,
-                      color: Colors.black, // ✅ 검정색
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
                     '원하시는 메뉴를\n선택해주세요',
                     style: TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.w700,
                       height: 1.25,
-                      color: Colors.black, // ✅ 검정색
+                      color: Colors.black,
                     ),
                   ),
                 ],
@@ -54,12 +46,13 @@ class DashboardPage extends StatelessWidget {
               // 위쪽 공간: 작게
               const Spacer(flex: 2),
 
-              // 버튼 묶음 (가운데 정렬)
+              // 가운데 버튼 묶음
               Align(
                 alignment: Alignment.center,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
+                    // IMU 버튼
                     FractionallySizedBox(
                       widthFactor: _kButtonWidthFactor,
                       child: SizedBox(
@@ -73,16 +66,18 @@ class DashboardPage extends StatelessWidget {
                               fontWeight: FontWeight.w700,
                             ),
                             shape: const RoundedRectangleBorder(
-                                borderRadius: _kRadius),
+                              borderRadius: _kRadius,
+                            ),
                             elevation: 0,
                           ),
-                          onPressed: () =>
-                              Navigator.pushNamed(context, '/imu-test'),
+                          onPressed: () => Navigator.pushNamed(context, '/imu-test'),
                           child: const Text('IMU 데이터베이스 확인'),
                         ),
                       ),
                     ),
-                    const SizedBox(height: 24), // 버튼 간 간격
+                    const SizedBox(height: 24),
+
+                    // 로봇 호출 버튼
                     FractionallySizedBox(
                       widthFactor: _kButtonWidthFactor,
                       child: SizedBox(
@@ -96,11 +91,11 @@ class DashboardPage extends StatelessWidget {
                               fontWeight: FontWeight.w700,
                             ),
                             shape: const RoundedRectangleBorder(
-                                borderRadius: _kRadius),
+                              borderRadius: _kRadius,
+                            ),
                             elevation: 0,
                           ),
-                          onPressed: () =>
-                              Navigator.pushNamed(context, '/robot-call'),
+                          onPressed: () => Navigator.pushNamed(context, '/robot-call'),
                           child: const Text('로봇 호출'),
                         ),
                       ),
@@ -109,12 +104,93 @@ class DashboardPage extends StatelessWidget {
                 ),
               ),
 
-              // 아래쪽 공간: 크게 (→ 버튼을 조금 위로 밀어올림)
               const Spacer(flex: 1),
+
+              // ── 구분선 + 퀵 링크(홈/설정/알림 …) ─────────────────────────────
+              const Divider(height: 32, thickness: 1),
+              _FooterQuickLinks(),
             ],
           ),
         ),
       ),
     );
   }
+}
+
+class _WelcomeTitle extends StatelessWidget {
+  const _WelcomeTitle();
+
+  @override
+  Widget build(BuildContext context) {
+    final user = auth.value.user;
+    final display = (user?.name != null && user!.name!.trim().isNotEmpty)
+        ? user.name!
+        : (user?.email ?? '사용자');
+
+    return Text(
+      '$display님, 반갑습니다!',
+      style: const TextStyle(
+        fontSize: 28,
+        fontWeight: FontWeight.w800,
+        height: 1.2,
+        color: Colors.black,
+      ),
+    );
+  }
+}
+
+class _FooterQuickLinks extends StatelessWidget {
+  const _FooterQuickLinks();
+
+  static const TextStyle _linkStyle = TextStyle(
+    fontSize: 14,
+    fontWeight: FontWeight.w600,
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Wrap(
+        spacing: 6,
+        runSpacing: 4,
+        alignment: WrapAlignment.center,
+        children: [
+          TextButton(
+            onPressed: () {
+              // 홈으로: 초기화면으로 이동 (필요 시 라우트명 수정)
+              Navigator.pushNamedAndRemoveUntil(context, '/', (r) => false);
+            },
+            child: const Text('홈으로', style: _linkStyle),
+          ),
+          _dot(),
+          TextButton(
+            onPressed: () {
+              // 설정 페이지 (라우트명 프로젝트에 맞춰 조정)
+              Navigator.pushNamed(context, '/settings');
+            },
+            child: const Text('설정', style: _linkStyle),
+          ),
+          _dot(),
+          TextButton(
+            onPressed: () {
+              // 알림 페이지 (라우트명 프로젝트에 맞춰 조정)
+              Navigator.pushNamed(context, '/notifications');
+            },
+            child: const Text('알림', style: _linkStyle),
+          ),
+          // 필요하면 더 추가: 도움말/로그아웃 등
+          // _dot(),
+          // TextButton(
+          //   onPressed: () => Navigator.pushNamed(context, '/help'),
+          //   child: const Text('도움말', style: _linkStyle),
+          // ),
+        ],
+      ),
+    );
+  }
+
+  Widget _dot() => const Padding(
+    padding: EdgeInsets.symmetric(horizontal: 2),
+    child: Text('·', style: TextStyle(fontSize: 14, color: Colors.black54)),
+  );
 }

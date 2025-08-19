@@ -1,7 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
-import '../pages/robot_call_page.dart'; // RobotStatus enum 재사용
+import '../pages/robot_call_page.dart' show RobotStatus, RobotCommAdapter;
 
 class RosbridgeComm implements RobotCommAdapter {
   RosbridgeComm({required this.url});
@@ -11,47 +12,69 @@ class RosbridgeComm implements RobotCommAdapter {
   StreamSubscription? _wsSub;
   bool _opened = false;
 
-  // 로봇별 상태 스트림
+  // 구독/광고 플래그
+  final Map<int, bool> _subscribed = {1: false, 2: false};
+  final Map<int, bool> _advertised = {1: false, 2: false};
+
+  // 상태 스트림/캐시
   final _statusCtrls = <int, StreamController<RobotStatus>>{
-    1: StreamController.broadcast(),
-    2: StreamController.broadcast(),
+    1: StreamController<RobotStatus>.broadcast(),
+    2: StreamController<RobotStatus>.broadcast(),
+  };
+  final _last = <int, RobotStatus>{
+    1: RobotStatus.disconnected,
+    2: RobotStatus.disconnected,
   };
 
-  // 구독 여부 캐시
-  final _subscribed = <int, bool>{1: false, 2: false};
-  final _advertised = <int, bool>{1: false, 2: false};
-
+  // ---------- 내부 유틸 ----------
   Future<void> _ensureOpen() async {
     if (_opened) return;
     _ch = WebSocketChannel.connect(Uri.parse(url));
-    _wsSub = _ch!.stream.listen(_onEvent, onError: (_) {
-      _opened = false;
-    }, onDone: () {
-      _opened = false;
-    });
+    _wsSub = _ch!.stream.listen(
+      _onEvent,
+      onDone: () {
+        _opened = false;
+        _push(1, RobotStatus.disconnected);
+        _push(2, RobotStatus.disconnected);
+      },
+      onError: (_) {
+        _opened = false;
+        _push(1, RobotStatus.disconnected);
+        _push(2, RobotStatus.disconnected);
+      },
+    );
     _opened = true;
   }
 
-  void _onEvent(dynamic evt) {
-    try {
-      print('[rosbridge<-] $evt');
-      final data = jsonDecode(evt as String);
-      if (data is! Map) return;
-      final op = data['op'];
-      if (op == 'publish') {
-        final topic = data['topic'] as String? ?? '';
-        final msg = data['msg'];
+  void _send(Map<String, dynamic> m) {
+    final js = jsonEncode(m);
+    if (kDebugMode) print('[rosbridge->] $js');
+    if (_opened) _ch!.sink.add(js);
+  }
 
-        int? rid;
-        if (topic.contains('/robot1/status')) rid = 1;
-        if (topic.contains('/robot2/status')) rid = 2;
-        if (rid != null) {
+  void _onEvent(dynamic evt) {
+    if (kDebugMode) print('[rosbridge<-] $evt');
+    try {
+      final m = jsonDecode(evt as String);
+      if (m is! Map) return;
+      if (m['op'] == 'publish' && m['topic'] is String) {
+        final topic = m['topic'] as String;
+        // /robot{n}/status 매칭
+        final reg = RegExp(r'^/robot(\d+)/status$');
+        final match = reg.firstMatch(topic);
+        if (match != null) {
+          final rid = int.tryParse(match.group(1) ?? '') ?? 1;
+          final msg = m['msg'];
           final s = _parseStatus(msg);
-          _statusCtrls[rid]!.add(s);
+          _push(rid, s);
         }
       }
-      // call_service 응답 등은 필요 시 처리
     } catch (_) {}
+  }
+
+  void _push(int rid, RobotStatus s) {
+    _last[rid] = s;
+    _statusCtrls[rid]?.add(s);
   }
 
   RobotStatus _parseStatus(dynamic msg) {
@@ -64,7 +87,7 @@ class RosbridgeComm implements RobotCommAdapter {
       case 'to_destination': return RobotStatus.toDestination;
       case 'unloading_wait': return RobotStatus.unloadingWait;
       case 'returning':      return RobotStatus.returning;
-      case 'moving':         return RobotStatus.moving;      // 호환
+      case 'moving':         return RobotStatus.moving;
       case 'charging':       return RobotStatus.charging;
       case 'error':          return RobotStatus.error;
       case 'idle':
@@ -72,38 +95,37 @@ class RosbridgeComm implements RobotCommAdapter {
     }
   }
 
-
-  void _send(Map<String, dynamic> payload) {
-    print('[rosbridge->] ${jsonEncode(payload)}');
-    if (_opened) _ch!.sink.add(jsonEncode(payload));
-  }
-
-  // --- RobotCommAdapter 구현 ---
-
+  // ---------- RobotCommAdapter 구현 ----------
   @override
   Future<bool> connectRobot(int robotId) async {
     await _ensureOpen();
 
-    // 상태 토픽 구독 (라치 권장)
+    // 1) 상태 구독 (type 반드시 명시)
     if (_subscribed[robotId] != true) {
-      _send({'op': 'subscribe', 'topic': '/robot$robotId/status', 'throttle_rate': 0});
+      _send({
+        'op': 'subscribe',
+        'topic': '/robot$robotId/status',
+        'type': 'std_msgs/String',
+        'throttle_rate': 0,
+        'queue_length': 1,
+      });
       _subscribed[robotId] = true;
     }
 
-    // 시작 명령 토픽 광고(발행 준비)
+    // 2) 시작 토픽 광고 (Bool)
     if (_advertised[robotId] != true) {
       _send({
         'op': 'advertise',
         'topic': '/robot$robotId/start',
-        'type': 'std_msgs/String',
+        'type': 'std_msgs/Bool',
         'latch': false,
         'queue_size': 1,
       });
       _advertised[robotId] = true;
     }
 
-    // 라치가 없다면 초깃값이 안 오니 UI가 곧장 '대기 중'을 원한다면 임시로 idle 푸시:
-    // _statusCtrls[robotId]!.add(RobotStatus.idle);
+    // 3) UI 즉시 업데이트(라치가 곧바로 덮어씀)
+    _push(robotId, RobotStatus.idle);
 
     return true;
   }
@@ -114,9 +136,11 @@ class RosbridgeComm implements RobotCommAdapter {
       _send({'op': 'unsubscribe', 'topic': '/robot$robotId/status'});
       _subscribed[robotId] = false;
     }
-    // 필요하면 unadvertise
-    // _send({'op':'unadvertise','topic':'/robot$robotId/start'});
-    _statusCtrls[robotId]!.add(RobotStatus.disconnected);
+    if (_advertised[robotId] == true) {
+      _send({'op': 'unadvertise', 'topic': '/robot$robotId/start'});
+      _advertised[robotId] = false;
+    }
+    _push(robotId, RobotStatus.disconnected);
   }
 
   @override
@@ -125,22 +149,22 @@ class RosbridgeComm implements RobotCommAdapter {
     _send({
       'op': 'publish',
       'topic': '/robot$robotId/start',
-      'msg': {'data': true}
+      'msg': {'data': true},
     });
     return true;
   }
 
   @override
   Future<RobotStatus> fetchStatus(int robotId) async {
-    // rosbridge엔 "get last"가 없으므로 라치가 없으면 확인 불가.
-    // 필요하면 /get_status 같은 ROS service를 만들어 call_service로 가져오세요.
-    return RobotStatus.disconnected;
+    return _last[robotId] ?? RobotStatus.disconnected;
   }
 
   @override
-  Stream<RobotStatus> watchStatus(int robotId) => _statusCtrls[robotId]!.stream;
+  Stream<RobotStatus> watchStatus(int robotId) {
+    return _statusCtrls[robotId]!.stream;
+  }
 
-  // 정리
+  // 선택: 전체 해제
   Future<void> dispose() async {
     await _wsSub?.cancel();
     await _ch?.sink.close();

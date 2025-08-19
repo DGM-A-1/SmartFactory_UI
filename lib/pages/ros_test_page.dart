@@ -1,30 +1,63 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:web_socket_channel/web_socket_channel.dart';
 import '../widgets/sf_page.dart';
+import 'package:web_socket_channel/web_socket_channel.dart';
 
-/// 간단 상태 enum (이 페이지 전용)
-enum RobotStatus { disconnected, idle, moving, charging, error }
+/// 테스트 페이지 전용 상태(세분화 포함)
+enum RobotStatus {
+  disconnected,
+  idle,
+  toLoading,        // 상차 위치 이동 중
+  loadingWait,      // 무게 대기 중
+  toDestination,    // 도착지 이동 중
+  unloadingWait,    // 하역 대기 중
+  returning,        // 복귀 중
+  moving,           // 호환
+  charging,
+  error,
+}
+
 extension _StatusLabel on RobotStatus {
-  String get label => switch (this) {
-    RobotStatus.disconnected => '연결 안됨',
-    RobotStatus.idle => '대기 중',
-    RobotStatus.moving => '이동 중',
-    RobotStatus.charging => '충전 중',
-    RobotStatus.error => '오류',
-  };
+  String get label {
+    switch (this) {
+      case RobotStatus.disconnected: return '연결 안됨';
+      case RobotStatus.idle:         return '대기 중';
+      case RobotStatus.toLoading:    return '상차 위치 이동 중';
+      case RobotStatus.loadingWait:  return '무게 대기 중';
+      case RobotStatus.toDestination:return '도착지 이동 중';
+      case RobotStatus.unloadingWait:return '하역 대기 중';
+      case RobotStatus.returning:    return '복귀 중';
+      case RobotStatus.moving:       return '이동 중';
+      case RobotStatus.charging:     return '충전 중';
+      case RobotStatus.error:        return '오류';
+    }
+  }
+
+  Color get color {
+    switch (this) {
+      case RobotStatus.disconnected: return Colors.grey;
+      case RobotStatus.idle:         return Colors.green;
+      case RobotStatus.toLoading:
+      case RobotStatus.toDestination:
+      case RobotStatus.returning:
+      case RobotStatus.moving:       return Colors.blue;
+      case RobotStatus.loadingWait:
+      case RobotStatus.unloadingWait:
+      case RobotStatus.charging:     return Colors.orange;
+      case RobotStatus.error:        return Colors.red;
+    }
+  }
 }
 
 class RosTestPage extends StatefulWidget {
   const RosTestPage({super.key});
-
   @override
   State<RosTestPage> createState() => _RosTestPageState();
 }
 
 class _RosTestPageState extends State<RosTestPage> {
-  // Jetson WS 주소 기본값(수정해서 사용)
+  // Jetson rosbridge 주소(수정 가능)
   final _urlCtrl = TextEditingController(text: 'ws://100.108.7.35:9090');
   int _robotId = 1;
 
@@ -64,14 +97,22 @@ class _RosTestPageState extends State<RosTestPage> {
   }
 
   Future<void> _close() async {
+    // 정리: 구독/광고 해제
+    if (_subscribed) {
+      _send({'op': 'unsubscribe', 'topic': '/robot$_robotId/status'});
+      _subscribed = false;
+    }
+    if (_advertised) {
+      _send({'op': 'unadvertise', 'topic': '/robot$_robotId/start'});
+      _advertised = false;
+    }
     await _sub?.cancel();
     await _ch?.sink.close();
     _sub = null;
     _ch = null;
+
     setState(() {
       _opened = false;
-      _subscribed = false;
-      _advertised = false;
       _lastStatus = RobotStatus.disconnected;
       _lastRaw = '';
     });
@@ -89,15 +130,15 @@ class _RosTestPageState extends State<RosTestPage> {
     _lastRaw = evt.toString();
     _logs.add('[<-] $_lastRaw');
 
-    // 상태 토픽 수신 파싱
     try {
       final data = jsonDecode(_lastRaw);
       if (data is Map && data['op'] == 'publish' && data['topic'] is String) {
         final topic = data['topic'] as String;
         if (topic == '/robot$_robotId/status') {
           final msg = data['msg'];
-          final str =
-          (msg is Map && msg['data'] is String) ? (msg['data'] as String) : '';
+          final str = (msg is Map && msg['data'] is String)
+              ? (msg['data'] as String).toLowerCase()
+              : '';
           setState(() => _lastStatus = _mapStatus(str));
         }
       }
@@ -107,16 +148,16 @@ class _RosTestPageState extends State<RosTestPage> {
 
   RobotStatus _mapStatus(String s) {
     switch (s) {
-      case 'moving':
-        return RobotStatus.moving;
-      case 'charging':
-        return RobotStatus.charging;
-      case 'error':
-        return RobotStatus.error;
+      case 'to_loading':     return RobotStatus.toLoading;
+      case 'loading_wait':   return RobotStatus.loadingWait;
+      case 'to_destination': return RobotStatus.toDestination;
+      case 'unloading_wait': return RobotStatus.unloadingWait;
+      case 'returning':      return RobotStatus.returning;
+      case 'moving':         return RobotStatus.moving;
+      case 'charging':       return RobotStatus.charging;
+      case 'error':          return RobotStatus.error;
       case 'idle':
-        return RobotStatus.idle;
-      default:
-        return RobotStatus.idle;
+      default:               return RobotStatus.idle;
     }
   }
 
@@ -132,7 +173,7 @@ class _RosTestPageState extends State<RosTestPage> {
     _send({
       'op': 'subscribe',
       'topic': '/robot$_robotId/status',
-      'type': 'std_msgs/String', // ✅ 타입 명시 중요
+      'type': 'std_msgs/String', // ✅ 타입 명시
       'throttle_rate': 0,
       'queue_length': 1,
     });
@@ -144,7 +185,7 @@ class _RosTestPageState extends State<RosTestPage> {
     _send({
       'op': 'advertise',
       'topic': '/robot$_robotId/start',
-      'type': 'std_msgs/Bool',
+      'type': 'std_msgs/Bool',    // ✅ Bool
       'latch': false,
       'queue_size': 1,
     });
@@ -190,15 +231,14 @@ class _RosTestPageState extends State<RosTestPage> {
   Widget build(BuildContext context) {
     return SFPage(
       title: 'ROS 연결 테스트',
-      // DropdownButton 등 Material 위젯을 위해 Material로 감싸기
-      child: Material(
+      child: Material( // Dropdown 등을 위해 Material 컨텍스트 제공
         color: Colors.transparent,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // URL + 로봇 선택 (오버플로우 방지: Dropdown 고정폭)
+              // URL + 로봇 선택
               Row(
                 children: [
                   Expanded(
@@ -230,7 +270,7 @@ class _RosTestPageState extends State<RosTestPage> {
               ),
               const SizedBox(height: 8),
 
-              // 연결/핑/닫기 (Wrap으로 자동 줄바꿈)
+              // 연결/핑/닫기
               Wrap(
                 spacing: 8,
                 runSpacing: 8,
@@ -259,18 +299,18 @@ class _RosTestPageState extends State<RosTestPage> {
               ),
               const SizedBox(height: 8),
 
-              // 구독/광고/발행 (Wrap으로 자동 줄바꿈)
+              // 구독/광고/발행
               Wrap(
                 spacing: 8,
                 runSpacing: 8,
                 children: [
                   ElevatedButton(
                     onPressed: _opened && !_subscribed ? _subscribeStatus : null,
-                    child: const Text('3) /로봇 연결'),
+                    child: const Text('3) /status 구독'),
                   ),
                   ElevatedButton(
                     onPressed: _opened && !_advertised ? _advertiseStart : null,
-                    child: const Text('4) /start 신호 보내기'),
+                    child: const Text('4) /start 광고'),
                   ),
                   ElevatedButton(
                     onPressed: _opened && _advertised ? _publishStart : null,
@@ -299,16 +339,9 @@ class _RosTestPageState extends State<RosTestPage> {
                 child: Row(
                   children: [
                     Container(
-                      width: 10,
-                      height: 10,
+                      width: 10, height: 10,
                       decoration: BoxDecoration(
-                        color: switch (_lastStatus) {
-                          RobotStatus.disconnected => Colors.grey,
-                          RobotStatus.idle => Colors.green,
-                          RobotStatus.moving => Colors.blue,
-                          RobotStatus.charging => Colors.orange,
-                          RobotStatus.error => Colors.red,
-                        },
+                        color: _lastStatus.color,
                         shape: BoxShape.circle,
                       ),
                     ),

@@ -12,6 +12,9 @@ class SFPage extends StatelessWidget {
     this.onTapMenu,
     this.onTapProfile,
     this.menuWidthFactor = 0.70, // 화면의 70%
+    // ▼ 새 멤버 콜백(옵션)
+    this.onImuDb,
+    this.onRobotCall,
   });
 
   final String title;
@@ -20,6 +23,10 @@ class SFPage extends StatelessWidget {
   final VoidCallback? onTapMenu;
   final VoidCallback? onTapProfile;
   final double menuWidthFactor;
+
+  // ▼ 새 멤버 콜백
+  final VoidCallback? onImuDb;
+  final VoidCallback? onRobotCall;
 
   @override
   Widget build(BuildContext context) {
@@ -71,6 +78,7 @@ class SFPage extends StatelessWidget {
                   builder: (context, state, _) {
                     return _MenuPanel(
                       state: state,
+                      // 공통 항목
                       onGoHome: () {
                         Navigator.pop(ctx);
                         Navigator.of(context).pushNamedAndRemoveUntil('/', (_) => false);
@@ -89,12 +97,25 @@ class SFPage extends StatelessWidget {
                       },
                       onLogout: () async {
                         Navigator.pop(ctx);
-                        try{
+                        try {
                           await AuthService.logout();
-                        } catch(_){}
-                        Navigator.of(context , rootNavigator: true)
-                        .pushNamedAndRemoveUntil('/', (route) => false);
+                        } catch (_) {}
+                        Navigator.of(context, rootNavigator: true)
+                            .pushNamedAndRemoveUntil('/', (route) => false);
                       },
+                      // 새 항목
+                      onImuDb: onImuDb ??
+                              () {
+                            Navigator.pop(ctx);
+                            // NOTE: 프로젝트에서 쓰는 라우트명으로 맞춰주세요.
+                            // 대시보드 코드 기준: '/imu-test'
+                            Navigator.of(context).pushNamed('/imu-test');
+                          },
+                      onRobotCall: onRobotCall ??
+                              () {
+                            Navigator.pop(ctx);
+                            Navigator.of(context).pushNamed('/robot-call');
+                          },
                     );
                   },
                 ),
@@ -106,6 +127,7 @@ class SFPage extends StatelessWidget {
     );
   }
 }
+
 class _MenuPanel extends StatelessWidget {
   const _MenuPanel({
     required this.state,
@@ -114,14 +136,23 @@ class _MenuPanel extends StatelessWidget {
     required this.onNotifications,
     required this.onHelp,
     required this.onLogout,
+    // 새 항목
+    required this.onImuDb,
+    required this.onRobotCall,
   });
 
   final AuthState state;
+
+  // 공통
   final VoidCallback onGoHome;
   final VoidCallback onSettings;
   final VoidCallback onNotifications;
   final VoidCallback onHelp;
   final VoidCallback onLogout;
+
+  // 새 항목
+  final VoidCallback onImuDb;
+  final VoidCallback onRobotCall;
 
   @override
   Widget build(BuildContext context) {
@@ -135,12 +166,14 @@ class _MenuPanel extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
             children: [
               // 제목
-              const Text('Menu',
-                  style: TextStyle(
-                    color: Colors.black,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                  )),
+              const Text(
+                'Menu',
+                style: TextStyle(
+                  color: Colors.black,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
               const SizedBox(height: 12),
 
               // ▽ 상단 회색 정보 블록 (상태에 따라 내용만 교체)
@@ -154,7 +187,6 @@ class _MenuPanel extends StatelessWidget {
                   ),
                 ),
               ] else ...[
-                // 이름(없으면 이메일로 대체) / 부서 / 직책
                 Text(
                   '이름: ${state.user?.name ?? state.user?.email ?? '-'}',
                   style: const TextStyle(
@@ -185,6 +217,10 @@ class _MenuPanel extends StatelessWidget {
               const Divider(height: 1),
 
               // ▽ 공통 메뉴 (로그인 여부와 무관하게 항상 노출)
+              _Item('IMU 데이터베이스 확인', onImuDb),
+              _Item('로봇 호출', onRobotCall),
+              const SizedBox(height: 8),
+              const Divider(height: 1),
               _Item('홈으로', onGoHome),
               _Item('설정', onSettings),
               _Item('알림', onNotifications),
@@ -213,7 +249,10 @@ class _Item extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
       alignment: Alignment.centerLeft,
       onPressed: onTap,
-      child: Text(label, style: TextStyle(color: c, fontSize: 16, fontWeight: FontWeight.w500)),
+      child: Text(
+        label,
+        style: TextStyle(color: c, fontSize: 16, fontWeight: FontWeight.w500),
+      ),
     );
   }
 }

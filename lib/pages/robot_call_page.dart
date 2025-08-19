@@ -125,17 +125,28 @@ class RobotCallPage extends StatefulWidget {
 
 class _RobotCallPageState extends State<RobotCallPage> {
   late final RobotCommAdapter _comm;
-  final RobotState _robot1 = RobotState(id: 1, status: RobotStatus.disconnected);
-  final RobotState _robot2 = RobotState(id: 2, status: RobotStatus.disconnected);
+  final RobotState _robot1 = RobotState(
+      id: 1, status: RobotStatus.disconnected);
+  final RobotState _robot2 = RobotState(
+      id: 2, status: RobotStatus.disconnected);
   StreamSubscription? _sub1;
   StreamSubscription? _sub2;
+  final GlobalKey<ScaffoldMessengerState> _smKey = GlobalKey<
+      ScaffoldMessengerState>();
 
   @override
   void initState() {
     super.initState();
     final url = AppConfig.I.rosWsUrl.value;
-    _comm = RosbridgeComm(url :url);
+    _comm = RosbridgeComm(url: url);
     _bootstrap();
+  }
+
+  void _snack(String msg) {
+    _smKey.currentState?.hideCurrentSnackBar();
+    _smKey.currentState?.showSnackBar(
+      SnackBar(content: Text(msg), behavior: SnackBarBehavior.floating),
+    );
   }
 
   Future<void> _bootstrap() async {
@@ -153,33 +164,25 @@ class _RobotCallPageState extends State<RobotCallPage> {
   }
 
   Future<void> _connectRobot(int robotId) async {
+    // 1) 상태 리스너를 먼저 단다 (이미 있으면 재사용)
+    if (robotId == 1 && _sub1 == null)   {
+      _sub1 = _comm.watchStatus(1).listen((s) {
+        if (!mounted) return;
+        _robot1.status.value = s;
+      });
+    } else if (robotId == 2 && _sub2 == null) {
+      _sub2 = _comm.watchStatus(2).listen((s) {
+        if (!mounted) return;
+        _robot2.status.value = s;
+      });
+    }
+
+    // 2) 실제 연결 (subscribe/advertise 전송)
     final ok = await _comm.connectRobot(robotId);
     if (!mounted) return;
-    if (ok) {
-      // 연결 후 상태 스트림 구독 시작
-      final sub = _comm.watchStatus(robotId).listen((s) {
-        if (!mounted) return;
-        if (robotId == 1) {
-          _robot1.status.value = s;
-        } else {
-          _robot2.status.value = s;
-        }
-      });
-
-      if (robotId == 1) {
-        _sub1?.cancel();
-        _sub1 = sub;
-      } else {
-        _sub2?.cancel();
-        _sub2 = sub;
-      }
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('로봇$robotId 연결 성공')));
-    } else {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('로봇$robotId 연결 실패')));
-    }
+    _snack(ok ? '로봇$robotId 연결 성공' : '로봇$robotId 연결 실패');
   }
+
 
   Future<void> _callRobot(int robotId) async {
     final ok = await _comm.sendStart(robotId);
@@ -192,33 +195,39 @@ class _RobotCallPageState extends State<RobotCallPage> {
   Widget build(BuildContext context) {
     return SFPage(
       title: '로봇 호출',
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _MapCard(),
-            const SizedBox(height: 8),
-            const _Legend(),
-            const SizedBox(height: 12),
-            _CallButtons(
-              onCall1: () => _callRobot(1),
-              onCall2: () => _callRobot(2),
+      child: ScaffoldMessenger( // ✅ 로컬 Messenger
+        key: _smKey,
+        child: Scaffold( // ✅ 로컬 Scaffold
+          backgroundColor: Colors.transparent,
+          body: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _MapCard(),
+                const SizedBox(height: 8),
+                const _Legend(),
+                const SizedBox(height: 12),
+                _CallButtons(
+                  onCall1: () => _callRobot(1),
+                  onCall2: () => _callRobot(2),
+                ),
+                const SizedBox(height: 16),
+                _StatusBlock(
+                  title: '로봇1 상태',
+                  statusListenable: _robot1.status,
+                  onConnect: () => _connectRobot(1),
+                ),
+                const SizedBox(height: 16),
+                _StatusBlock(
+                  title: '로봇2 상태',
+                  statusListenable: _robot2.status,
+                  onConnect: () => _connectRobot(2),
+                ),
+                const SizedBox(height: 32),
+              ],
             ),
-            const SizedBox(height: 16),
-            _StatusBlock(
-              title: '로봇1 상태',
-              statusListenable: _robot1.status,
-              onConnect: () => _connectRobot(1),
-            ),
-            const SizedBox(height: 16),
-            _StatusBlock(
-              title: '로봇2 상태',
-              statusListenable: _robot2.status,
-              onConnect: () => _connectRobot(2),
-            ),
-            const SizedBox(height: 32),
-          ],
+          ),
         ),
       ),
     );
@@ -443,25 +452,36 @@ class _StatusBlock extends StatelessWidget {
 
 class _StatusDot extends StatelessWidget {
   const _StatusDot({required this.status});
+
   final RobotStatus status;
 
   Color get _color {
     switch (status) {
-      case RobotStatus.disconnected: return Colors.grey;
-      case RobotStatus.idle:         return Colors.green;
+      case RobotStatus.disconnected:
+        return Colors.grey;
+      case RobotStatus.idle:
+        return Colors.green;
       case RobotStatus.toLoading:
       case RobotStatus.toDestination:
-      case RobotStatus.returning:    return Colors.blue;
+      case RobotStatus.returning:
+        return Colors.blue;
       case RobotStatus.loadingWait:
-      case RobotStatus.unloadingWait:return Colors.orange;
-      case RobotStatus.moving:       return Colors.blue;
-      case RobotStatus.charging:     return Colors.orange;
-      case RobotStatus.error:        return Colors.red;
+      case RobotStatus.unloadingWait:
+        return Colors.orange;
+      case RobotStatus.moving:
+        return Colors.blue;
+      case RobotStatus.charging:
+        return Colors.orange;
+      case RobotStatus.error:
+        return Colors.red;
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Container(width: 12, height: 12, decoration: BoxDecoration(color: _color, shape: BoxShape.circle));
+    return Container(width: 12,
+        height: 12,
+        decoration: BoxDecoration(color: _color, shape: BoxShape.circle));
   }
+
 }
