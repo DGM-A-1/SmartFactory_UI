@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
-import '../pages/robot_call_page.dart' show RobotStatus, RobotCommAdapter;
+import '../pages/robot_call_page.dart';
 
 class RosbridgeComm implements RobotCommAdapter {
   RosbridgeComm({required this.url});
@@ -78,22 +78,23 @@ class RosbridgeComm implements RobotCommAdapter {
   }
 
   RobotStatus _parseStatus(dynamic msg) {
-    final str = (msg is Map && msg['data'] is String)
-        ? (msg['data'] as String).toLowerCase()
-        : 'idle';
+    final raw = (msg is Map && msg['data'] is String) ? msg['data'] as String : 'idle';
+    final str = raw.trim().toLowerCase().replaceAll('-', '_'); // ← 정규화 중요
     switch (str) {
-      case 'to_loading':     return RobotStatus.toLoading;
-      case 'loading_wait':   return RobotStatus.loadingWait;
-      case 'to_destination': return RobotStatus.toDestination;
-      case 'unloading_wait': return RobotStatus.unloadingWait;
-      case 'returning':      return RobotStatus.returning;
-      case 'moving':         return RobotStatus.moving;
-      case 'charging':       return RobotStatus.charging;
-      case 'error':          return RobotStatus.error;
+      case 'to_loading':       return RobotStatus.toLoading;
+      case 'loading_wait':     return RobotStatus.loadingWait;
+      case 'to_stopover':      return RobotStatus.toStopover;     // ← P2 대기/경유
+      case 'to_destination':   return RobotStatus.toDestination;
+      case 'unloading_wait':   return RobotStatus.unloadingWait;
+      case 'returning':        return RobotStatus.returning;
+      case 'moving':           return RobotStatus.moving;
+      case 'charging':         return RobotStatus.charging;
+      case 'error':            return RobotStatus.error;
       case 'idle':
-      default:               return RobotStatus.idle;
+      default:                 return RobotStatus.idle;
     }
   }
+
 
   // ---------- RobotCommAdapter 구현 ----------
   @override
@@ -159,10 +160,11 @@ class RosbridgeComm implements RobotCommAdapter {
     return _last[robotId] ?? RobotStatus.disconnected;
   }
 
-  @override
+// 2) RosbridgeComm.watchStatus 에서 사용 (핵심은 msg['data'])
   Stream<RobotStatus> watchStatus(int robotId) {
     return _statusCtrls[robotId]!.stream;
   }
+
 
   // 선택: 전체 해제
   Future<void> dispose() async {
